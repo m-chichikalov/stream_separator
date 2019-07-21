@@ -145,8 +145,8 @@ public:
     {
         q_len_of_msg.Flush();
         ringbuffer_flush( &rb );
-        AlgorithmState.count_received_chars = 0;
-        AlgorithmState.state = State::LOOKING_FOR_SYNC;
+        alg_state.count_received_chars = 0;
+        alg_state.state = State::LOOKING_FOR_SYNC;
     }
 
     void push ( uint8_t byte )
@@ -158,7 +158,7 @@ public:
 private:
     CQueue q_len_of_msg;
     struct ringbuffer rb{};
-    uint32_t timeout{};
+    uint32_t timeout{0};
 
     enum class State
     {
@@ -167,14 +167,12 @@ private:
         WAITING_FULL_MSG,
     };
 
-    struct DetectAlgorithmState
-    {
+    struct {
         State state;
         uint32_t count_received_chars;
+        uint32_t count_missed_chars;
         uint32_t full_msg_length;
-    };
-
-    DetectAlgorithmState AlgorithmState{ State::LOOKING_FOR_SYNC, 0, 0 };
+    } alg_state{ State::LOOKING_FOR_SYNC, 0, 0, 0 };
 
     void discard ( uint32_t len_ )
     {
@@ -187,37 +185,37 @@ private:
     {
         BaseType_t pxHigherPriorityTaskWoken = false;
 
-        AlgorithmState.count_received_chars++;
-        switch ( AlgorithmState.state )
+        alg_state.count_received_chars++;
+        switch ( alg_state.state )
         {
         case State::LOOKING_FOR_SYNC:
             if( StreamConverter::get_sync( rb ))
             {
-                uint32_t counter_before_sync = AlgorithmState.count_received_chars - StreamConverter::LEN_OF_SYNC;
+                uint32_t counter_before_sync = alg_state.count_received_chars - StreamConverter::LEN_OF_SYNC;
                 if ( counter_before_sync != 0 )
                 {
                     q_len_of_msg.EnqueueFromISR( &counter_before_sync, &pxHigherPriorityTaskWoken );
-                    AlgorithmState.count_received_chars = StreamConverter::LEN_OF_SYNC;
+                    alg_state.count_received_chars = StreamConverter::LEN_OF_SYNC;
                 }
-                AlgorithmState.state = State::WAITING_LENGTH;
+                alg_state.state = State::WAITING_LENGTH;
             }
             break;
 
             /** @todo-> What about msgs with fixed length? */
         case State::WAITING_LENGTH:
-            if ( AlgorithmState.count_received_chars == StreamConverter::BYTE_CONTAINED_LEN )
+            if ( alg_state.count_received_chars == StreamConverter::BYTE_CONTAINED_LEN )
             {
-                AlgorithmState.full_msg_length = StreamConverter::get_len( rb );
-                AlgorithmState.state = State::WAITING_FULL_MSG;
+                alg_state.full_msg_length = StreamConverter::get_len( rb );
+                alg_state.state = State::WAITING_FULL_MSG;
             }
             break;
 
         case State::WAITING_FULL_MSG:
-            if ( AlgorithmState.count_received_chars == AlgorithmState.full_msg_length )
+            if ( alg_state.count_received_chars == alg_state.full_msg_length )
             {
-                q_len_of_msg.EnqueueFromISR( &AlgorithmState.count_received_chars, &pxHigherPriorityTaskWoken );
-                AlgorithmState.count_received_chars = 0;
-                AlgorithmState.state = State::LOOKING_FOR_SYNC;
+                q_len_of_msg.EnqueueFromISR( &alg_state.count_received_chars, &pxHigherPriorityTaskWoken );
+                alg_state.count_received_chars = 0;
+                alg_state.state = State::LOOKING_FOR_SYNC;
             }
             break;
 
