@@ -115,3 +115,14 @@ TEST_F( UBX_Msgs_CUT, NoiseBetweenMsgsShouldBeDiscarded )
     len = ubx_stream.next( buff, 1024 );
     EXPECT_EQ( len, uint32_t( 48 ))  << "wrong 9 bytes was not discarded!!!";
 };
+
+TEST_F( UBX_Msgs_CUT, NoiseBeforeMsgsShouldBeDiscarded )
+{
+    f.add( noise_9, 9 );
+    f.add( svin_48, 48 );
+    f.feed_all( ubx_stream );
+
+    uint8_t buff[1024];
+    uint32_t len = ubx_stream.next( buff, 1024 );
+    EXPECT_EQ( len, uint32_t( 48 )) << "wrong 9 bytes was not discarded!!!";
+};

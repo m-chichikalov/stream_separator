@@ -92,7 +92,9 @@ class StreamSeparator
 public:
     /** @todo > the length of queue hardcoded, maybe setup */
     StreamSeparator():
-        q_len_of_msg{ 10, sizeof(uint32_t)}
+        /** queue contains length of msg required to be read or discarded from buffer.
+         *  if negative value - this number of bytes should be discarded. */
+        queue{ 10, sizeof( int32_t )}
     {};
     ~StreamSeparator() {};
 
@@ -118,24 +120,26 @@ public:
 
     int32_t next ( uint8_t* buff_read_to, uint32_t size )
     {
-        uint32_t retval{0};
-        if ( q_len_of_msg.Dequeue( &retval, timeout ))
+        int32_t retval{0};
+        while ( queue.Dequeue( &retval, timeout ))
         {
-            if ( retval > size )
+            if ( retval > int32_t( size ) || retval < 0 )
             {
                 /**
                  * There is a strategy to discard received msg
                  * when it's length more than receiver can accept.
                  */
-                discard( retval );
+                discard( std::abs( retval ));
                 retval = 0;
+                continue;
             }
             else
             {
-                uint32_t was_read{0};
+                int32_t was_read{0};
                 while ( was_read < retval) {
                     ringbuffer_get( &rb, &buff_read_to[was_read++]);
                 }
+                break;
             }
         }
         return retval;
@@ -143,10 +147,12 @@ public:
 
     void flush()
     {
-        q_len_of_msg.Flush();
-        ringbuffer_flush( &rb );
-        alg_state.count_received_chars = 0;
-        alg_state.state = State::LOOKING_FOR_SYNC;
+        CRITICAL_SECTION_ENTER();
+            queue.Flush();
+            ringbuffer_flush( &rb );
+            alg_state.count_received_chars = 0;
+            alg_state.state = State::LOOKING_FOR_SYNC;
+        CRITICAL_SECTION_LEAVE();
     }
 
     void push ( uint8_t byte )
@@ -156,7 +162,7 @@ public:
     }
 
 private:
-    CQueue q_len_of_msg;
+    CQueue queue;
     struct ringbuffer rb{};
     uint32_t timeout{0};
 
@@ -191,10 +197,10 @@ private:
         case State::LOOKING_FOR_SYNC:
             if( StreamConverter::get_sync( rb ))
             {
-                uint32_t counter_before_sync = alg_state.count_received_chars - StreamConverter::LEN_OF_SYNC;
+                int32_t counter_before_sync = 0 - (alg_state.count_received_chars - StreamConverter::LEN_OF_SYNC);
                 if ( counter_before_sync != 0 )
                 {
-                    q_len_of_msg.EnqueueFromISR( &counter_before_sync, &pxHigherPriorityTaskWoken );
+                    queue.EnqueueFromISR( &counter_before_sync, &pxHigherPriorityTaskWoken );
                     alg_state.count_received_chars = StreamConverter::LEN_OF_SYNC;
                 }
                 alg_state.state = State::WAITING_LENGTH;
@@ -213,7 +219,7 @@ private:
         case State::WAITING_FULL_MSG:
             if ( alg_state.count_received_chars == alg_state.full_msg_length )
             {
-                q_len_of_msg.EnqueueFromISR( &alg_state.count_received_chars, &pxHigherPriorityTaskWoken );
+                queue.EnqueueFromISR( &alg_state.count_received_chars, &pxHigherPriorityTaskWoken );
                 alg_state.count_received_chars = 0;
                 alg_state.state = State::LOOKING_FOR_SYNC;
             }

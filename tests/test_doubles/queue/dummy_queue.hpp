@@ -16,7 +16,7 @@ public:
         if ( queue.size() >= length )
             return false;
 
-        queue.push_back(*((size_t*)item));
+        queue.push_back(*((int*)item));
         return true;
     };
     bool Enqueue( void* item, uint32_t Timeout ) { return Enqueue( item ); };
@@ -27,7 +27,7 @@ public:
         if ( queue.size() == 0 )
             return false;
 
-        *((size_t*)item) = queue[0];
+        *((int*)item) = queue[0];
         queue.pop_front();
         return true;
     };
@@ -41,7 +41,7 @@ public:
 //    NumItems, uint32_t( void );
 //    NumSpacesLeft, uint32_t( void );
 
-    std::deque<size_t> queue;
+    std::deque<int> queue;
     size_t length;
 };
 
