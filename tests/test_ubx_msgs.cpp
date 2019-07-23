@@ -13,14 +13,14 @@ typedef bool BaseType_t;
     #include "stream_separator.hpp"
 
 namespace {
-    const static uint32_t G_buffer_size = 1024;
-    static uint8_t G_buffer[G_buffer_size];
+    const static uint32_t G_buffer_size = 128;
+    static std::array<uint8_t, G_buffer_size> G_buffer{0};
 
-    const uint8_t svin_48[] = { 0xb5, 0x62, 0x01, 0x3b, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc8, 0x63, 0xde,
-      0x1d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8a, 0x87 };
+    constexpr static std::array<uint8_t, 48> svin_48{ 0xb5, 0x62, 0x01, 0x3b, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc8, 0x63, 0xde,
+            0x1d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8a, 0x87 };
 
-    const uint8_t noise_9[] = { 0x62, 0x01, 0x3b, 0x28, 0x00, 0x90, 0x64, 0xde, 0x1d };
+    constexpr std::array<uint8_t, 9> noise_9{ 0x62, 0x01, 0x3b, 0x28, 0x00, 0x90, 0x64, 0xde, 0x1d };
 };
 
 // Extra test fixture for convenient feeding the stream
@@ -31,10 +31,11 @@ struct Feed {
     };
 
     std::deque<msg> msgs;
-    void add( const uint8_t* stream, const uint32_t size, int32_t times = 1 )
+
+    template <size_t n>
+    void add(const std::array<uint8_t, n>& arr, int32_t times = 1 )
     {
-        assert( stream );
-        msg new_msg{ stream, size};
+        msg new_msg{ arr.data(), arr.size()};
         for ( auto i = 0; i < times; i++ )
         {
             msgs.push_back(new_msg);
@@ -73,56 +74,77 @@ public:
     UBX_Msgs_CUT()
     {
         ubx_stream
-            .buffer( G_buffer, G_buffer_size )
+            .buffer( G_buffer.data(), G_buffer_size )
             .set_timeout( 500 ) // ms.
             .create();
     };
 
 protected:
+    std::array<uint8_t, 1024> buff{0};
     Feed f;
     StreamSeparator<DummyQueue, UBX_Msg> ubx_stream;
 };
 
 TEST_F( UBX_Msgs_CUT, TwoCorrectMsgsInRow )
 {
-    f.add( svin_48, 48, 2 );
+    f.add( svin_48, 2 );
     f.feed_all( ubx_stream );
 
-    uint8_t buff[1024];
-    uint32_t len = ubx_stream.next( buff, 1024 );
+    uint32_t len = ubx_stream.next( buff.data(), 1024 );
     EXPECT_EQ( len, uint32_t( 48 ));
-    len = ubx_stream.next( buff, 1024);
+    len = ubx_stream.next( buff.data(), 1024);
     EXPECT_EQ( len, uint32_t( 48 ));
 };
 
 TEST_F( UBX_Msgs_CUT, EmptyReturnZero )
 {
-    uint8_t buff[1024];
-    uint32_t len = ubx_stream.next( buff, 1024);
+    uint32_t len = ubx_stream.next( buff.data(), 1024);
     EXPECT_EQ( len, uint32_t( 0 ));
 };
 
 TEST_F( UBX_Msgs_CUT, NoiseBetweenMsgsShouldBeDiscarded )
 {
-    f.add( svin_48, 48 );
-    f.add( noise_9, 9 );
-    f.add( svin_48, 48 );
+    f.add( svin_48 );
+    f.add( noise_9 );
+    f.add( svin_48 );
     f.feed_all( ubx_stream );
 
-    uint8_t buff[1024];
-    uint32_t len = ubx_stream.next( buff, 1024 );
+    uint32_t len = ubx_stream.next( buff.data(), 1024 );
     EXPECT_EQ( len, uint32_t( 48 ));
-    len = ubx_stream.next( buff, 1024 );
+    len = ubx_stream.next( buff.data(), 1024 );
     EXPECT_EQ( len, uint32_t( 48 ))  << "wrong 9 bytes was not discarded!!!";
 };
 
 TEST_F( UBX_Msgs_CUT, NoiseBeforeMsgsShouldBeDiscarded )
 {
-    f.add( noise_9, 9 );
-    f.add( svin_48, 48 );
+    f.add( noise_9 );
+    f.add( svin_48 );
     f.feed_all( ubx_stream );
 
-    uint8_t buff[1024];
-    uint32_t len = ubx_stream.next( buff, 1024 );
+    uint32_t len = ubx_stream.next( buff.data(), 1024 );
     EXPECT_EQ( len, uint32_t( 48 )) << "wrong 9 bytes was not discarded!!!";
+};
+
+TEST_F( UBX_Msgs_CUT, ReturnedDataEqDataWereSent )
+{
+    f.add( svin_48 );
+    f.feed_all( ubx_stream );
+
+    uint32_t len = ubx_stream.next( buff.data(), 1024 );
+    EXPECT_EQ( len, uint32_t( 48 ));
+
+    EXPECT_EQ(strcmp((char*)buff.data(), (char*)svin_48.data()), 0 );
+};
+
+TEST_F( UBX_Msgs_CUT, BufferOverWrittenByDataLongerThanLenOfBuffer )
+{
+    f.add( svin_48 );
+
+    // pushing 90 more bytes to reach buffer size; size=(128-1)
+    f.add( noise_9, 10);
+    f.feed_all( ubx_stream );
+
+    uint32_t len = ubx_stream.next( buff.data(), 1024 );
+    EXPECT_EQ( len, uint32_t( 48 ));
+    EXPECT_EQ(strcmp((char*)buff.data(), (char*)svin_48.data()), 0 );
 };
