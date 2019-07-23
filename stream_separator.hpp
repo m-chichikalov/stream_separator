@@ -157,8 +157,16 @@ public:
 
     void push ( uint8_t byte )
     {
-        ringbuffer_put( &rb, byte );
-        detect();
+        // Checking available space before pushing into
+        if ( ringbuffer_num( &rb ) <= rb.size )
+        {
+            ringbuffer_put( &rb, byte );
+            detect();
+        }
+        else
+        {
+            alg_state.count_missed_chars++;
+        }
     }
 
 private:
