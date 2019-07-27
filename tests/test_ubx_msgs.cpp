@@ -20,7 +20,12 @@ namespace {
             0x1d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8a, 0x87 };
 
+    constexpr static std::array<uint8_t, 18> svin_18{ 0xb5, 0x62, 0x01, 0x3b, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x8a, 0xb5 };
+
     constexpr std::array<uint8_t, 9> noise_9{ 0x62, 0x01, 0x3b, 0x28, 0x00, 0x90, 0x64, 0xde, 0x1d };
+
+    constexpr std::array<uint8_t, 5> zeros_5{ 0x00, 0x00, 0x00, 0x00, 0x00 };
 };
 
 // Extra test fixture for convenient feeding the stream
@@ -147,4 +152,17 @@ TEST_F( UBX_Msgs_CUT, BufferOverWrittenByDataLongerThanLenOfBuffer )
     uint32_t len = ubx_stream.next( buff.data(), 1024 );
     EXPECT_EQ( len, uint32_t( 48 ));
     EXPECT_EQ(strcmp((char*)buff.data(), (char*)svin_48.data()), 0 );
+};
+
+TEST_F( UBX_Msgs_CUT, TheLastByteEqTheFirstByteOfSyncFalsTriggers )
+{
+    f.add( svin_18 );
+    f.add( noise_9 );
+    f.feed_all( ubx_stream );
+
+    uint32_t len = ubx_stream.next( buff.data(), 1024 );
+    EXPECT_EQ( len, uint32_t( 18 ));
+
+    len = ubx_stream.next( buff.data(), 1024 );
+    EXPECT_EQ( len, uint32_t( 0 )) << "False triggered by the same byte as SYNC1 at the end of msg." ;
 };
