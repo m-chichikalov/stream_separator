@@ -203,7 +203,7 @@ private:
         switch ( alg_state.state )
         {
         case State::LOOKING_FOR_SYNC:
-            if( StreamConverter::get_sync( rb ))
+            if( alg_state.count_received_chars >= StreamConverter::LEN_OF_SYNC && StreamConverter::get_sync( rb ))
             {
                 int32_t counter_before_sync = 0 - (alg_state.count_received_chars - StreamConverter::LEN_OF_SYNC);
                 if ( counter_before_sync != 0 )
