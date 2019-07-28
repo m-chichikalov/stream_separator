@@ -77,6 +77,15 @@ The UBX msg has the next struct: SYNC1:SYNC2:CLASS:ID:LENGHT_L:LENGHT_H:.PAYLOAD
 	// whatever happens early.
 	uint32_t len = ubx_stream.next( buffer, buff_size );
 ```
+
+### History: ( just for myself, nothing interesting )
+#### 27 July 2019
+- Found interesting and hiden bug; shortly: it would false trigger detection of SYNC if the last byte of previous correct msg == the first byte of SYNC and the next byte fallowing it is a "junk" and == to second byte of SYNC word. **FIXED**.
+- Found that it has next constraint and there is no way to fix it with current implementation:
+The main problem is that the algorithm relies on the bytes within the stream to get the size of the message, however if it's a stream where lossing bytes in the middle of the message is possible the algorithm can get not correct length of it for example just slightly more than real size and embed the next msg into ongoing one - miss the next. It's much easy to understand by illustration...
+![](https://user-images.githubusercontent.com/23377892/62001064-2eaa6980-b0b5-11e9-9bda-3a45bae0dca8.png)
+Have an idea how to change the realization to fix this constraint. [WIP]
+
 ### TODO:
 - [ ] length of queue hard-coded
 - [ ] think about msg with fixed length? how we can process them?
