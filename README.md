@@ -85,6 +85,11 @@ The UBX msg has the next struct: SYNC1:SYNC2:CLASS:ID:LENGHT_L:LENGHT_H:.PAYLOAD
 The main problem is that the algorithm relies on the bytes within the stream to get the size of the message, however if it's a stream where lossing bytes in the middle of the message is possible the algorithm can get not correct length of it for example just slightly more than real size and embed the next msg into ongoing one - miss the next. It's much easy to understand by illustration...
 ![](https://user-images.githubusercontent.com/23377892/62001064-2eaa6980-b0b5-11e9-9bda-3a45bae0dca8.png)
 Have an idea how to change the realization to fix this constraint. [WIP]
+#### 22 August 2019
+- Open for myself amasing DSL library [boost::SML](https://boost-experimental.github.io/sml/index.html). So, going rewrite and use this library for.
+- How I can more generalize algorithm, do not couple to specific ring buffer; maybe std::array? Would be good to use queue from STL but it's using dynamic memory allocation. 
+- Another idea to redo it by applying CRTP and derive from this class and provide help-functions ( msg. specific ) in derived class.
+
 
 ### TODO:
 - [ ] length of queue hard-coded
